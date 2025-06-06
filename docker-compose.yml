@@ -1,0 +1,39 @@
+services: 
+  app:
+      build: .
+      ports:
+        - "8080:8080"
+      depends_on:
+        - postgres
+        - redis
+      environment:
+        - DATABASE_URL=postgres://admin:password@postgres:5432/loja_db?sslmode=disable
+        - REDIS_URL=redis:6379
+        - JWT_SECRET=americanas-super-secret-jwt-key-2025
+      volumes:
+        - .:/app
+      working_dir: /app
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: loja_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+
+  redis:
+    images: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
