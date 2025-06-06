@@ -6,13 +6,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	
+
 	"github.com/Code-Aether/americanas-loja-api/internal/config"
 	"github.com/Code-Aether/americanas-loja-api/internal/handlers"
 	"github.com/Code-Aether/americanas-loja-api/internal/repository"
 	"github.com/Code-Aether/americanas-loja-api/internal/services"
-	"github.com/Code-Aether/americanas-loja-api/pkg/database"
 	"github.com/Code-Aether/americanas-loja-api/pkg/cache"
+	"github.com/Code-Aether/americanas-loja-api/pkg/database"
 )
 
 func main() {
@@ -22,15 +22,15 @@ func main() {
 
 	cfg := config.Load()
 
-	db,err := database.Connect(cfg.DatabaseURL)
+	db, err := database.Connect(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	rdb := cache.NewRedisClient(cfg.RedisURL)
+	rdb := cache.NewRedisClient(cfg.RedisURL, "", 0)
 
 	productRepo := repository.NewProductRepository(db)
-	userRepo    := repository.NewUserRepository(db)
+	userRepo := repository.NewUserRepository(db)
 	productService := services.NewProductService(productRepo, rdb)
 	authService := services.NewAuthService(userRepo)
 
@@ -44,7 +44,7 @@ func main() {
 
 	setupRoutes(r, productHandler, authHandler)
 
-	port := os.GetEnv("PORT")
+	port := os.Getenv("PORT")
 
 	if port == "" {
 		port = "8080"

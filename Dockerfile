@@ -1,17 +1,10 @@
-FROM golang:1.12-alpine as builder
 
+FROM golang:1.23-alpine
 WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-
+RUN apk add --no-cache git ca-certificates
 COPY . .
-RUN go build -o main cmd/server/main.go
-
-FROM alpine:lastest
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-
-COPY --from=builder /app/main .
-
+RUN go mod tidy
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/server
+RUN chmod +x main
 EXPOSE 8080
 CMD ["./main"]
