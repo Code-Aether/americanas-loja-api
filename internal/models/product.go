@@ -39,4 +39,5 @@ type ProductUpdateRequest struct {
 	Category    *string  `json:"category_id,omitempty"`
 	ImageURL    *string  `json:"image_url" gorm:"type:text"`
 	Active      *bool    `json:"active,omitempty"`
+	SKU         *string  `json:"sku"`
 }

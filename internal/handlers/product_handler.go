@@ -46,6 +46,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		Description: req.Description,
 		Price:       req.Price,
 		Stock:       req.Stock,
+		SKU:         req.SKU,
 		Category:    req.Category,
 		ImageURL:    req.ImageURL,
 		Active:      true,
@@ -168,6 +169,10 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 
 	if req.Active != nil {
 		product.Active = *req.Active
+	}
+
+	if req.SKU != nil {
+		product.SKU = *req.SKU
 	}
 
 	if err := h.productService.Update(product); err != nil {

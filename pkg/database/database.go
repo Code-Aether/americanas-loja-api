@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"github.com/Code-Aether/americanas-loja-api/internal/models"
+	"golang.org/x/crypto/bcrypt"
+
 	//"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -148,5 +150,43 @@ func SeedData(db *gorm.DB) error {
 	}
 
 	log.Printf("Seeded %d products successfully!", len(products))
+	return nil
+}
+
+func SeedAdminUser(db *gorm.DB) error {
+	log.Println("Staring admin user seeding...")
+
+	adminEmail := "aetherraito@protonmail.com"
+	adminPassword := "admin_password_123"
+	adminUsername := "Administrator"
+
+	var adminUser models.User
+	err := db.Where("email = ?", adminEmail).First(&adminUser).Error
+	if err == nil {
+		log.Println("Admin user already exits, skipping...")
+		return nil
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash admin password: %w", err)
+	}
+
+	admin := models.User{
+		Email:    adminEmail,
+		Password: string(hashedPassword),
+		Name:     adminUsername,
+		Role:     "admin",
+		Active:   true,
+	}
+
+	if err := db.Create(&admin).Error; err != nil {
+		return fmt.Errorf("failed to create admin user: %w", err)
+	}
+
+	log.Printf("Admin %s created", adminUsername)
+	log.Printf("Email: %s", adminEmail)
+	log.Printf("Password: %s", adminPassword)
+
 	return nil
 }

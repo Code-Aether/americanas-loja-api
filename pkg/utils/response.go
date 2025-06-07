@@ -35,7 +35,7 @@ func SuccessResponse(c *gin.Context, message string, data interface{}) {
 		Data:    data,
 	})
 }
-func CreateResponse(c *gin.Context, status int, message string, data interface{}) {
+func CreatedResponse(c *gin.Context, status int, message string, data interface{}) {
 	c.JSON(status, Response{
 		Success: true,
 		Message: message,
@@ -66,6 +66,10 @@ func NotFoundResponse(c *gin.Context, message string, err error) {
 
 func InternalServerErrorResponse(c *gin.Context, message string, err error) {
 	ErrorResponse(c, http.StatusInternalServerError, message, err)
+}
+
+func UnathorizedResponse(c *gin.Context, message string) {
+	ErrorResponse(c, http.StatusForbidden, message, nil)
 }
 
 func PaginatedSuccessResponse(c *gin.Context, message string, data interface{}, pagination Pagination) {

@@ -1,20 +1,85 @@
 package config
 
-import "os"
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"log"
+	"os"
+)
 
 type Config struct {
-	DatabaseURL string
+	DBHost      string
+	DBUser      string
+	DBPassword  string
+	DBName      string
+	DBPort      string
 	RedisURL    string
 	JWTSecret   string
 	Port        string
+	Environment string
 }
 
 func Load() *Config {
-	return &Config{
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://admin:password@localhost:5432/loja_db?sslmode=disable"),
+	config := &Config{
+		DBHost:      getEnv("DB_HOST", "localhost"),
+		DBUser:      getEnv("DB_USER", "admin"),
+		DBPassword:  getEnv("DB_PASSWORD", "password"),
+		DBName:      getEnv("DB_NAME", "store"),
+		DBPort:      getEnv("DB_PORT", "5432"),
 		RedisURL:    getEnv("REDIS_URL", "localhost:6379"),
-		JWTSecret:   getEnv("JWT_SECRET", "***"),
+		JWTSecret:   getJWTSecret(),
 		Port:        getEnv("PORT", "8080"),
+		Environment: getEnv("ENVIRONMENT", "dev"),
+	}
+
+	validateConfig(config)
+
+	return config
+}
+
+func getJWTSecret() string {
+	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		if len(secret) < 32 {
+			log.Fatal("JWT_SECRET must be atlest 32 characters long")
+
+		}
+		return secret
+	}
+
+	if os.Getenv("ENVIRONMENT") == "prod" {
+		log.Fatal("JWT_SECRET is required on production")
+	}
+
+	log.Println("Generating a random JWT_SECRET in dev environment")
+	secret := generateRandomSecret()
+	log.Printf("export JWT_SECRET=%s", secret)
+
+	return secret
+}
+
+func generateRandomSecret() string {
+	bytes := make([]byte, 64)
+	if _, err := rand.Read(bytes); err != nil {
+		log.Fatal("Error generating random secret:", err)
+	}
+	return base64.URLEncoding.EncodeToString(bytes)
+}
+
+func validateConfig(config *Config) {
+	if len(config.JWTSecret) < 32 {
+		log.Fatal("JWT_SECRET is less than 32 chars")
+	}
+
+	if config.Environment == "prod" {
+		if config.DBPassword == "password" {
+			log.Fatal("Default database password is not allowed in production")
+		}
+
+		if config.JWTSecret == "super-secret-much-secure-very-wow" {
+			log.Fatal("Default JWT_SECRET is not allowd in production")
+		}
+
+		log.Println("Production configuration validated")
 	}
 }
 
