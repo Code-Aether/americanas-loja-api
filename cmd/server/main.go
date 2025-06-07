@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -22,12 +24,28 @@ func main() {
 
 	cfg := config.Load()
 
-	db, err := database.Connect(cfg.DatabaseURL)
+	parsedUrl, err := url.Parse(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Fatal("failed to parse url from database", err)
+	}
+
+	parsedHost := parsedUrl.Hostname()
+	parsedUser := parsedUrl.User.Username()
+	parsedPassword, _ := parsedUrl.User.Password()
+	parsedPort := parsedUrl.Port()
+	parsedDbName := strings.TrimPrefix(parsedUrl.Path, "/")
+
+	db, err := database.NewConnection(parsedHost, parsedUser, parsedPassword, parsedDbName, parsedPort)
+	if err != nil {
+		log.Fatal("failed to connect to database:", err)
 	}
 
 	rdb := cache.NewRedisClient(cfg.RedisURL, "", 0)
+
+	err = database.AutoMigrate(db)
+	if err != nil {
+		log.Fatal("failed to auto migrate:", err)
+	}
 
 	productRepo := repository.NewProductRepository(db)
 	userRepo := repository.NewUserRepository(db)
@@ -36,6 +54,11 @@ func main() {
 
 	productHandler := handlers.NewProductHandler(productService)
 	authHandler := handlers.NewAuthHandler(authService)
+
+	err = database.SeedData(db)
+	if err != nil {
+		log.Fatal("failed to seed data:", err)
+	}
 
 	r := gin.Default()
 
