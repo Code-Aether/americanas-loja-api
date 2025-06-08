@@ -4,18 +4,30 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/Code-Aether/americanas-loja-api/internal/config"
 	"github.com/Code-Aether/americanas-loja-api/internal/models"
 	"golang.org/x/crypto/bcrypt"
 
-	//"gorm.io/driver/postgres"
+	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func NewConnection(host, user, password, dbname, port string) (*gorm.DB, error) {
-	//dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=America/Sao_Paulo", host, user, password, dbname, port)
-	db, err := gorm.Open(sqlite.Open("products.db"), &gorm.Config{
+func NewConnection(cfg *config.Config) (*gorm.DB, error) {
+	var dialector gorm.Dialector
+
+	if cfg.DBDriver == "sqlite" {
+		log.Println("Using SQLite database")
+		dialector = sqlite.Open(cfg.DBSQlitePath)
+	} else {
+		log.Println("Using PostgreSQL database")
+		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=America/Sao_Paulo",
+			cfg.DBHost, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBPort)
+		dialector = postgres.Open(dsn)
+	}
+
+	db, err := gorm.Open(dialector, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 
@@ -24,7 +36,6 @@ func NewConnection(host, user, password, dbname, port string) (*gorm.DB, error) 
 	}
 
 	log.Println("Connected to the database")
-
 	return db, nil
 }
 

@@ -1,0 +1,560 @@
+basePath: /api/v1
+definitions:
+  models.Product:
+    properties:
+      active:
+        type: boolean
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      name:
+        maxLength: 255
+        minLength: 2
+        type: string
+      price:
+        type: number
+      sku:
+        type: string
+      stock:
+        minimum: 0
+        type: integer
+      updated_at:
+        type: string
+    required:
+    - name
+    - price
+    type: object
+  models.User:
+    properties:
+      active:
+        type: boolean
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      role:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  types.AuthResponse:
+    properties:
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+    type: object
+  types.CreateProductRequest:
+    properties:
+      category:
+        example: Eletrônicos
+        maxLength: 100
+        minLength: 2
+        type: string
+      description:
+        example: Smartphone Apple com 256GB de armazenamento
+        type: string
+      image_url:
+        example: https://example.com/iphone15.jpg
+        type: string
+      name:
+        example: iPhone 15 Pro Max
+        maxLength: 200
+        minLength: 2
+        type: string
+      price:
+        example: 8999.99
+        type: number
+      sku:
+        example: IPHONE-15-PRO-MAX-256
+        maxLength: 50
+        minLength: 3
+        type: string
+      stock:
+        example: 50
+        minimum: 0
+        type: integer
+    required:
+    - category
+    - name
+    - price
+    - sku
+    - stock
+    type: object
+  types.LoginRequest:
+    properties:
+      email:
+        example: joao@teste.com
+        type: string
+      password:
+        example: "123456"
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  types.ProductListResponse:
+    properties:
+      limit:
+        example: 10
+        type: integer
+      page:
+        example: 1
+        type: integer
+      products:
+        items:
+          $ref: '#/definitions/models.Product'
+        type: array
+      total:
+        example: 150
+        type: integer
+    type: object
+  types.RegisterRequest:
+    properties:
+      email:
+        example: joao@teste.com
+        type: string
+      name:
+        example: João Silva
+        maxLength: 100
+        minLength: 2
+        type: string
+      password:
+        example: "123456"
+        minLength: 6
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  types.UpdateProductRequest:
+    properties:
+      active:
+        example: true
+        type: boolean
+      category:
+        example: Smartphones
+        maxLength: 100
+        minLength: 2
+        type: string
+      description:
+        example: Descrição atualizada do produto
+        type: string
+      image_url:
+        example: https://example.com/new-iphone15.jpg
+        type: string
+      name:
+        example: iPhone 15 Pro Max - Atualizado
+        maxLength: 200
+        minLength: 2
+        type: string
+      price:
+        example: 8499.99
+        type: number
+      sku:
+        example: IPHONE-15-PRO-MAX-256
+        maxLength: 50
+        minLength: 3
+        type: string
+      stock:
+        example: 45
+        minimum: 0
+        type: integer
+    required:
+    - sku
+    type: object
+  utils.Response:
+    properties:
+      data: {}
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API RESTful para e-commerce
+  title: Americanas Loja API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Autentica usuário e retorna JWT token
+      parameters:
+      - description: Credenciais de login
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/types.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login realizado com sucesso
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/types.AuthResponse'
+              type: object
+        "400":
+          description: Dados inválidos
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "401":
+          description: Credenciais inválidas
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: Erro interno
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Fazer login
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Gera um novo JWT token válido
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token renovado com sucesso
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/types.AuthResponse'
+              type: object
+        "401":
+          description: Token inválido
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: Erro interno
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - Bearer: []
+      summary: Renovar token
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Cria uma nova conta de usuário no sistema
+      parameters:
+      - description: Dados do usuário
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/types.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Usuário criado com sucesso
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/types.AuthResponse'
+              type: object
+        "400":
+          description: Dados inválidos
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "409":
+          description: Email já existe
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: Erro interno
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Registrar novo usuário
+      tags:
+      - auth
+  /products:
+    get:
+      consumes:
+      - application/json
+      description: Retorna lista paginada de produtos disponíveis
+      parameters:
+      - default: 1
+        description: Número da página
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Itens por página
+        in: query
+        name: limit
+        type: integer
+      - description: Filtrar por categoria
+        example: '"Eletrônicos"'
+        in: query
+        name: category
+        type: string
+      - description: Buscar produtos
+        example: '"iPhone"'
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Lista de produtos
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/types.ProductListResponse'
+              type: object
+        "500":
+          description: Erro interno
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Listar produtos
+      tags:
+      - products
+    post:
+      consumes:
+      - application/json
+      description: Cria um novo produto no sistema (requer autenticação)
+      parameters:
+      - description: Dados do produto
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/types.CreateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Produto criado com sucesso
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Product'
+              type: object
+        "400":
+          description: Dados inválidos
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "401":
+          description: Token inválido
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "409":
+          description: SKU já existe
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: Erro interno
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - Bearer: []
+      summary: Criar novo produto
+      tags:
+      - products
+  /products/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove um produto do sistema (apenas admins)
+      parameters:
+      - description: ID do produto
+        example: 1
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Produto deletado com sucesso
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "400":
+          description: ID inválido
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "401":
+          description: Token inválido
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "403":
+          description: Acesso negado
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "404":
+          description: Produto não encontrado
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: Erro interno
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - Bearer: []
+      summary: Deletar produto
+      tags:
+      - products
+    get:
+      consumes:
+      - application/json
+      description: Retorna detalhes de um produto pelo ID
+      parameters:
+      - description: ID do produto
+        example: 1
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Produto encontrado
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Product'
+              type: object
+        "400":
+          description: ID inválido
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "404":
+          description: Produto não encontrado
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: Erro interno
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Obter produto específico
+      tags:
+      - products
+    put:
+      consumes:
+      - application/json
+      description: Atualiza um produto existente (requer autenticação)
+      parameters:
+      - description: ID do produto
+        example: 1
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Dados para atualização
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/types.UpdateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Produto atualizado com sucesso
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Product'
+              type: object
+        "400":
+          description: Dados inválidos
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "401":
+          description: Token inválido
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "404":
+          description: Produto não encontrado
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: Erro interno
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - Bearer: []
+      summary: Atualizar produto
+      tags:
+      - products
+  /user/profile:
+    get:
+      consumes:
+      - application/json
+      description: Retorna informações do usuário autenticado
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Perfil do usuário
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.User'
+              type: object
+        "401":
+          description: Token inválido
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: Erro interno
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - Bearer: []
+      summary: Obter perfil do usuário
+      tags:
+      - auth
+securityDefinitions:
+  Bearer:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

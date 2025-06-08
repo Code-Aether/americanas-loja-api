@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/Code-Aether/americanas-loja-api/internal/models"
 	"github.com/Code-Aether/americanas-loja-api/internal/services"
+	"github.com/Code-Aether/americanas-loja-api/internal/types"
 	"github.com/Code-Aether/americanas-loja-api/pkg/utils"
 )
 
@@ -23,70 +25,105 @@ func NewAuthHandler(authService *services.AuthService) *AuthHandler {
 	}
 }
 
+// Register godoc
+// @Summary      Registrar novo usuário
+// @Description  Cria uma nova conta de usuário no sistema
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        user body types.RegisterRequest true "Dados do usuário"
+// @Success      201  {object} utils.Response{data=types.AuthResponse} "Usuário criado com sucesso"
+// @Failure      400  {object} utils.Response "Dados inválidos"
+// @Failure      409  {object} utils.Response "Email já existe"
+// @Failure      500  {object} utils.Response "Erro interno"
+// @Router       /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
-	var req models.RegisterRequest
+	var req types.RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestResponse(c, "INVALID_DATA", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, "INVALID_DATA", err)
 		return
 	}
 
-	if len(req.Password) < 6 {
-		utils.BadRequestResponse(c, "PASSWORD_MIN_CHARS_ERROR", nil)
+	if err := h.validator.Struct(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "INVALID_DATA", err)
 		return
 	}
 
-	if len(req.Name) < 2 {
-		utils.BadRequestResponse(c, "USER_NAME_MIN_CHARS_ERROR", nil)
-		return
+	user := &models.User{
+		Name:     req.Name,
+		Email:    req.Email,
+		Password: req.Password,
+		Role:     "user",
+		Active:   true,
 	}
 
-	if err := h.validator.Var(req.Email, "required,email"); err != nil {
-		utils.BadRequestResponse(c, "INVALID_EMAIL", err)
-		return
-	}
-
-	user, err := h.authService.Register(req)
+	token, err := h.authService.Register(user)
 	if err != nil {
-		utils.BadRequestResponse(c, err.Error(), nil)
+		if err.Error() == "user already exsists with this email" {
+			utils.ErrorResponse(c, http.StatusConflict, "EMAIL_ALREADY_EXISTS", err)
+			return
+		}
+		utils.InternalServerErrorResponse(c, err.Error(), nil)
 		return
 	}
 
-	user.Password = ""
-
-	utils.SuccessResponse(c, "USER_CREATED", gin.H{
-		"user":    user,
-		"message": "LOGIN_ALLOWED_MSG",
-	})
+	response := types.AuthResponse{
+		Token: *token,
+		User:  *user,
+	}
+	utils.SuccessResponse(c, "USER_CREATED", response)
 }
 
+// Login godoc
+// @Summary      Fazer login
+// @Description  Autentica usuário e retorna JWT token
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        credentials body types.LoginRequest true "Credenciais de login"
+// @Success      200  {object} utils.Response{data=types.AuthResponse} "Login realizado com sucesso"
+// @Failure      400  {object} utils.Response "Dados inválidos"
+// @Failure      401  {object} utils.Response "Credenciais inválidas"
+// @Failure      500  {object} utils.Response "Erro interno"
+// @Router       /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
-	var req models.LoginRequest
+	var req types.LoginRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequestResponse(c, "INVALID_DATA", err)
 		return
 	}
 
-	if req.Email == "" {
-		utils.BadRequestResponse(c, "EMAIL_IS_REQUIRED", nil)
+	if err := h.validator.Struct(&req); err != nil {
+		utils.BadRequestResponse(c, "INVALID_DATA", err)
 		return
 	}
 
-	if req.Password == "" {
-		utils.BadRequestResponse(c, "PASSWORD_IS_REQUIRED", nil)
-		return
-	}
-
-	loginResponse, err := h.authService.Login(req)
+	token, user, err := h.authService.Login(req)
 	if err != nil {
-		utils.UnathorizedResponse(c, err.Error())
+		utils.ErrorResponse(c, http.StatusUnauthorized, "INVALID_CREDENCIALS", err)
 		return
 	}
 
-	utils.SuccessResponse(c, "LOGIN_SUCCESS_MSG", loginResponse)
+	response := types.AuthResponse{
+		Token: *token,
+		User:  *user,
+	}
+	utils.SuccessResponse(c, "LOGIN_SUCCESS_MSG", response)
 }
 
+// GetProfile godoc
+// @Summary      Obter perfil do usuário
+// @Description  Retorna informações do usuário autenticado
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Security     Bearer
+// @Success      200  {object} utils.Response{data=models.User} "Perfil do usuário"
+// @Failure      401  {object} utils.Response "Token inválido"
+// @Failure      500  {object} utils.Response "Erro interno"
+// @Router       /user/profile [get]
 func (h *AuthHandler) GetProfile(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -131,6 +168,17 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	utils.SuccessResponse(c, "PASSWORD_CHANGE_SUCCESS_MSG", nil)
 }
 
+// RefreshToken godoc
+// @Summary      Renovar token
+// @Description  Gera um novo JWT token válido
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Security     Bearer
+// @Success      200  {object} utils.Response{data=types.AuthResponse} "Token renovado com sucesso"
+// @Failure      401  {object} utils.Response "Token inválido"
+// @Failure      500  {object} utils.Response "Erro interno"
+// @Router       /auth/refresh [post]
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
@@ -144,15 +192,18 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	newToken, err := h.authService.RefreshToken(tokenString)
+	newToken, user, err := h.authService.RefreshToken(tokenString)
 	if err != nil {
 		utils.UnathorizedResponse(c, "INVALID_TOKEN_MSG")
 		return
 	}
 
-	utils.SuccessResponse(c, "TOKEN_REFRESH_SUCCESS_MSG", gin.H{
-		"token": newToken,
-	})
+	response := types.AuthResponse{
+		Token: newToken,
+		User:  *user,
+	}
+
+	utils.SuccessResponse(c, "TOKEN_REFRESH_SUCCESS_MSG", response)
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {

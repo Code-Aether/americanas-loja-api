@@ -8,19 +8,22 @@ import (
 )
 
 type Config struct {
-	DBHost      string
-	DBUser      string
-	DBPassword  string
-	DBName      string
-	DBPort      string
-	RedisURL    string
-	JWTSecret   string
-	Port        string
-	Environment string
+	DBSQlitePath string
+	DBDriver     string
+	DBHost       string
+	DBUser       string
+	DBPassword   string
+	DBName       string
+	DBPort       string
+	RedisURL     string
+	JWTSecret    string
+	Port         string
+	Environment  string
 }
 
 func Load() *Config {
 	config := &Config{
+		DBDriver:    getEnv("DB_DRIVER", "sqlite"),
 		DBHost:      getEnv("DB_HOST", "localhost"),
 		DBUser:      getEnv("DB_USER", "admin"),
 		DBPassword:  getEnv("DB_PASSWORD", "password"),

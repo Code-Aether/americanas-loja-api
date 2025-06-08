@@ -10,6 +10,7 @@ import (
 
 	"github.com/Code-Aether/americanas-loja-api/internal/models"
 	"github.com/Code-Aether/americanas-loja-api/internal/repository"
+	"github.com/Code-Aether/americanas-loja-api/internal/types"
 )
 
 type AuthService struct {
@@ -31,64 +32,58 @@ func NewAuthService(userRepo *repository.UserRepository, jwtSecret string) *Auth
 	}
 }
 
-func (s *AuthService) Login(req models.LoginRequest) (*models.LoginResponse, error) {
-
+func (s *AuthService) Login(req types.LoginRequest) (*string, *models.User, error) {
 	user, err := s.userRepo.GetByEmail(req.Email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("EMAIL_OR_PASS_NOT_VALID")
+			return nil, nil, errors.New("EMAIL_OR_PASS_NOT_VALID")
 		}
-		return nil, errors.New("INTERNAL_ERROR")
+		return nil, nil, errors.New("INTERNAL_ERROR")
 	}
 
 	if !user.Active {
-		return nil, errors.New("INACTIVE_USER")
+		return nil, nil, errors.New("INACTIVE_USER")
 	}
 
 	if !s.checkPassword(req.Password, user.Password) {
-		return nil, errors.New("EMAIL_OR_PASS_NOT_VALID")
+		return nil, nil, errors.New("EMAIL_OR_PASS_NOT_VALID")
 	}
 
-	token, err := s.generateJWT(user)
+	token, user, err := s.generateJWT(user)
 	if err != nil {
-		return nil, errors.New("ERROR_GENERATING_ACCESS_TOKEN")
+		return nil, nil, errors.New("ERROR_GENERATING_ACCESS_TOKEN")
 	}
 
-	user.Password = ""
-
-	return &models.LoginResponse{
-		Token: token,
-		User:  *user,
-	}, nil
+	return &token, user, nil
 }
 
-func (s *AuthService) Register(req models.RegisterRequest) (*models.User, error) {
-	existingUser, err := s.userRepo.GetByEmail(req.Email)
+func (s *AuthService) Register(user *models.User) (*string, error) {
+
+	existingUser, err := s.userRepo.GetByEmail(user.Email)
 	if err == nil && existingUser != nil {
 		return nil, errors.New("user already exsists with this email")
 	}
 
-	hashedPassword, err := s.hashPassword(req.Password)
+	hashedPassword, err := s.hashPassword(user.Password)
 	if err != nil {
 		return nil, errors.New("error processing the user password")
 	}
 
-	user := &models.User{
-		Email:    req.Email,
-		Password: hashedPassword,
-		Name:     req.Name,
-		Role:     "user",
-		Active:   true,
-	}
+	user.Password = hashedPassword
 
 	if err := s.userRepo.Create(user); err != nil {
 		return nil, errors.New("error create a new user")
 	}
 
-	return user, nil
+	token, _, err := s.generateJWT(user)
+	if err != nil {
+		return nil, errors.New("error created a new token")
+	}
+
+	return &token, nil
 }
 
-func (s *AuthService) generateJWT(user *models.User) (string, error) {
+func (s *AuthService) generateJWT(user *models.User) (string, *models.User, error) {
 	timeNow := time.Now()
 	claims := JWTClaims{
 		UserID: user.ID,
@@ -104,7 +99,9 @@ func (s *AuthService) generateJWT(user *models.User) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.jwtSecret))
+
+	signedString, err := token.SignedString([]byte(s.jwtSecret))
+	return signedString, user, err
 }
 
 func (s *AuthService) ValidateToken(tokenString string) (*JWTClaims, error) {
@@ -145,15 +142,15 @@ func (s *AuthService) GetUserByToken(tokenString string) (*models.User, error) {
 	return user, nil
 }
 
-func (s *AuthService) RefreshToken(tokenString string) (string, error) {
+func (s *AuthService) RefreshToken(tokenString string) (string, *models.User, error) {
 	claims, err := s.ValidateToken(tokenString)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	user, err := s.userRepo.GetByID(claims.UserID)
 	if err != nil {
-		return "", errors.New("USER_NOT_FOUND")
+		return "", nil, errors.New("USER_NOT_FOUND")
 	}
 
 	return s.generateJWT(user)

@@ -1,45 +1,66 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
+	"net/http"
 	"strconv"
 
 	"github.com/Code-Aether/americanas-loja-api/internal/models"
 	"github.com/Code-Aether/americanas-loja-api/internal/services"
+	"github.com/Code-Aether/americanas-loja-api/internal/types"
 	"github.com/Code-Aether/americanas-loja-api/pkg/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 type ProductHandler struct {
 	productService *services.ProductService
+	validator      *validator.Validate
 }
 
 func NewProductHandler(productService *services.ProductService) *ProductHandler {
 	return &ProductHandler{
 		productService: productService,
+		validator:      validator.New(),
 	}
 }
 
+// CreateProduct godoc
+// @Summary      Criar novo produto
+// @Description  Cria um novo produto no sistema (requer autenticação)
+// @Tags         products
+// @Accept       json
+// @Produce      json
+// @Security     Bearer
+// @Param        product body types.CreateProductRequest true "Dados do produto"
+// @Success      201 {object} utils.Response{data=models.Product} "Produto criado com sucesso"
+// @Failure      400 {object} utils.Response "Dados inválidos"
+// @Failure      401 {object} utils.Response "Token inválido"
+// @Failure      409 {object} utils.Response "SKU já existe"
+// @Failure      500 {object} utils.Response "Erro interno"
+// @Router       /products [post]
 func (h *ProductHandler) CreateProduct(c *gin.Context) {
-	var req models.ProductCreateRequest
+	var req types.CreateProductRequest
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequestResponse(c, "INVALID_DATA", err)
 		return
 	}
 
-	if req.Name == "" {
-		utils.BadRequestResponse(c, "NAME_IS_REQUIRED", nil)
+	if err := h.validator.Struct(&req); err != nil {
+		utils.BadRequestResponse(c, "INVALID_DATA", err)
 		return
 	}
 
-	if req.Price <= 0 {
-		utils.BadRequestResponse(c, "PRICE_NEEDS_TO_BE_BIGGER_THAN_ZERO", nil)
+	user, err := checkUserLogged(c)
+	if err != nil {
+		utils.UnathorizedResponse(c, "USER_NOT_AUTHENTICATED")
 		return
 	}
 
-	if req.Stock < 0 {
-		utils.BadRequestResponse(c, "STOCK_CANNOT_BE_NEGATIVE", nil)
-		return
-	}
+	productHandlerLog("User %s (role: %s) creating product: %s",
+		user.Email, user.Role, req.Name)
 
 	product := &models.Product{
 		Name:        req.Name,
@@ -53,6 +74,10 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	}
 
 	if err := h.productService.Create(product); err != nil {
+		if err.Error() == "sku already exists" {
+			utils.ErrorResponse(c, http.StatusConflict, "SKU_ALREADY_EXISTS", err)
+			return
+		}
 		utils.InternalServerErrorResponse(c, "ERROR_CREATING_PRODUCT", err)
 		return
 	}
@@ -60,6 +85,19 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	utils.SuccessResponse(c, "PRODUCT_CREATED_WITH_SUCCESS", product)
 }
 
+// GetProducts godoc
+// @Summary      Listar produtos
+// @Description  Retorna lista paginada de produtos disponíveis
+// @Tags         products
+// @Accept       json
+// @Produce      json
+// @Param        page     query int    false "Número da página" default(1)
+// @Param        limit    query int    false "Itens por página" default(10)
+// @Param        category query string false "Filtrar por categoria" example("Eletrônicos")
+// @Param        search   query string false "Buscar produtos" example("iPhone")
+// @Success      200 {object} utils.Response{data=types.ProductListResponse} "Lista de produtos"
+// @Failure      500 {object} utils.Response "Erro interno"
+// @Router       /products [get]
 func (h *ProductHandler) GetProducts(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
@@ -94,6 +132,18 @@ func (h *ProductHandler) GetProducts(c *gin.Context) {
 	utils.PaginatedSuccessResponse(c, "PRODUCTS_LISTED_SUCCESS", products, pagination)
 }
 
+// GetProduct godoc
+// @Summary      Obter produto específico
+// @Description  Retorna detalhes de um produto pelo ID
+// @Tags         products
+// @Accept       json
+// @Produce      json
+// @Param        id path int true "ID do produto" example(1)
+// @Success      200 {object} utils.Response{data=models.Product} "Produto encontrado"
+// @Failure      400 {object} utils.Response "ID inválido"
+// @Failure      404 {object} utils.Response "Produto não encontrado"
+// @Failure      500 {object} utils.Response "Erro interno"
+// @Router       /products/{id} [get]
 func (h *ProductHandler) GetProduct(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -110,6 +160,21 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	utils.SuccessResponse(c, "PRODUCT_FOUND", product)
 }
 
+// UpdateProduct godoc
+// @Summary      Atualizar produto
+// @Description  Atualiza um produto existente (requer autenticação)
+// @Tags         products
+// @Accept       json
+// @Produce      json
+// @Security     Bearer
+// @Param        id path int true "ID do produto" example(1)
+// @Param        product body types.UpdateProductRequest true "Dados para atualização"
+// @Success      200 {object} utils.Response{data=models.Product} "Produto atualizado com sucesso"
+// @Failure      400 {object} utils.Response "Dados inválidos"
+// @Failure      401 {object} utils.Response "Token inválido"
+// @Failure      404 {object} utils.Response "Produto não encontrado"
+// @Failure      500 {object} utils.Response "Erro interno"
+// @Router       /products/{id} [put]
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -118,11 +183,26 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	var req models.ProductUpdateRequest
+	var req types.UpdateProductRequest
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequestResponse(c, "INVALID_DATA", err)
 		return
 	}
+
+	if err := h.validator.Struct(&req); err != nil {
+		utils.BadRequestResponse(c, "INVALID_DATA", err)
+		return
+	}
+
+	user, err := checkUserLogged(c)
+	if err != nil {
+		utils.UnathorizedResponse(c, "USER_NOT_AUTHENTICATED")
+		return
+	}
+
+	productHandlerLog("User %s (role %s) updating product ID: %d",
+		user.Email, user.Role, id)
 
 	product, err := h.productService.GetByID(uint(id))
 	if err != nil {
@@ -131,48 +211,25 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	}
 
 	if req.Name != nil {
-		if *req.Name == "" {
-			utils.BadRequestResponse(c, "NAME_IS_REQUIRED", nil)
-			return
-		}
 		product.Name = *req.Name
 	}
-
 	if req.Description != nil {
 		product.Description = *req.Description
 	}
-
 	if req.Price != nil {
-		if *req.Price <= 0 {
-			utils.BadRequestResponse(c, "PRICE_NEEDS_TO_BE_BIGGER_THAN_ZERO", nil)
-			return
-		}
 		product.Price = *req.Price
 	}
-
 	if req.Stock != nil {
-		if *req.Stock < 0 {
-			utils.BadRequestResponse(c, "STOCK_CANNOT_BE_NEGATIVE", nil)
-			return
-		}
-
 		product.Stock = *req.Stock
 	}
-
 	if req.Category != nil {
 		product.Category = *req.Category
 	}
-
 	if req.ImageURL != nil {
 		product.ImageURL = *req.ImageURL
 	}
-
 	if req.Active != nil {
 		product.Active = *req.Active
-	}
-
-	if req.SKU != nil {
-		product.SKU = *req.SKU
 	}
 
 	if err := h.productService.Update(product); err != nil {
@@ -183,11 +240,40 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	utils.SuccessResponse(c, "PRODUCT_UPDATE_SUCCEFULL", product)
 }
 
+// DeleteProduct godoc
+// @Summary      Deletar produto
+// @Description  Remove um produto do sistema (apenas admins)
+// @Tags         products
+// @Accept       json
+// @Produce      json
+// @Security     Bearer
+// @Param        id path int true "ID do produto" example(1)
+// @Success      200 {object} utils.Response "Produto deletado com sucesso"
+// @Failure      400 {object} utils.Response "ID inválido"
+// @Failure      401 {object} utils.Response "Token inválido"
+// @Failure      403 {object} utils.Response "Acesso negado"
+// @Failure      404 {object} utils.Response "Produto não encontrado"
+// @Failure      500 {object} utils.Response "Erro interno"
+// @Router       /products/{id} [delete]
 func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		utils.BadRequestResponse(c, "INVALID_ID", err)
+		return
+	}
+
+	user, err := checkUserLogged(c)
+	if err != nil {
+		utils.BadRequestResponse(c, err.Error(), err)
+		return
+	}
+
+	productHandlerLog("Admin %s deletando produto ID: %d", user.Email, id)
+
+	_, err = h.productService.GetByID(uint(id))
+	if err != nil {
+		utils.NotFoundResponse(c, "PRODUCT_NOT_FOUND", err)
 		return
 	}
 
@@ -197,4 +283,19 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, "PRODUCT_DELETED_WITH_SUCCESS", nil)
+}
+
+func checkUserLogged(c *gin.Context) (*models.User, error) {
+	user, exists := c.Get("user")
+	if !exists {
+		return nil, fmt.Errorf("USER_NOT_AUTHENTICATED")
+	}
+	userModel := user.(*models.User)
+	return userModel, nil
+}
+
+func productHandlerLog(format string, v ...any) {
+	prefix := "[PRODUCT_HANDLER]"
+	message := fmt.Sprintf(format, v)
+	log.Printf("%s %s", prefix, message)
 }
