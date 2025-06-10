@@ -2,7 +2,7 @@
 
 > API RESTful para e-commerce inspirado na Americanas, desenvolvida com Go, Gin, GORM e arquitetura limpa.
 
-[![CI/CD Pipeline](https://github.com/Code-Aether/americanas-loja-api/workflows/🚀%20CI/CD%20Pipeline/badge.svg)](https://github.com/Code-Aether/americanas-loja-api/actions)
+[![CI/CD Pipeline](https://github.com/Code-Aether/americanas-loja-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Code-Aether/americanas-loja-api/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Code-Aether/americanas-loja-api)](https://goreportcard.com/report/github.com/Code-Aether/americanas-loja-api)
 [![codecov](https://codecov.io/gh/Code-Aether/americanas-loja-api/branch/main/graph/badge.svg)](https://codecov.io/gh/Code-Aether/americanas-loja-api)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
