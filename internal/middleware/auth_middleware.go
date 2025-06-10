@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 
 	"github.com/Code-Aether/americanas-loja-api/internal/services"
@@ -22,12 +23,16 @@ func NewAuthMiddleware(authService *services.AuthService) *AuthMiddleware {
 
 func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if c.IsAborted() {
+			return
+		}
+
 		authMiddlewareLog("Verifying autentication for: %s %s", c.Request.Method, c.Request.URL.Path)
 
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			authMiddlewareLog("Did not receive a token")
-			utils.UnathorizedResponse(c, "NO_TOKEN_REQ_MSG")
+			utils.ErrorResponse(c, http.StatusUnauthorized, "authorization header is missing", nil)
 			c.Abort()
 			return
 		}
@@ -35,25 +40,30 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
 			authMiddlewareLog("Invalid Header format for token, should use Bearer <token>")
-			utils.UnathorizedResponse(c, "WRONG_TOKEN_FORMAT_MSG"+" Use: Bearer <token>")
+			utils.ErrorResponse(c, http.StatusUnauthorized, "invalid token format. Use: Bearer <token>", nil)
 			c.Abort()
+			return
 		}
 
 		user, err := m.authService.GetUserByToken(tokenString)
 		if err != nil {
 			authMiddlewareLog("Token is invalid, or expired")
-			utils.UnathorizedResponse(c, "INVALID_TOKEN_OR_EXPIRED")
+			utils.ErrorResponse(c, http.StatusUnauthorized, "invalid token", nil)
 			c.Abort()
 			return
 		}
 
-		authMiddlewareLog("User %s (role: %s) authenticated", user, user.Role)
+		authMiddlewareLog("User %s (role: %s) authenticated", user.Email, user.Role)
 
 		c.Set("user", user)
 		c.Set("user_id", user.ID)
 		c.Set("user_role", user.Role)
 
-		c.Next()
+		if !c.IsAborted() {
+			if next, exists := c.Get("next"); exists {
+				next.(func())()
+			}
+		}
 
 		authMiddlewareLog("Request has processed for %s", user.Email)
 	}
@@ -69,18 +79,22 @@ func (m *AuthMiddleware) RequireAdmin() gin.HandlerFunc {
 
 		userRole, exists := c.Get("user_role")
 		if !exists {
-			utils.InternalServerErrorResponse(c, "INTERNAL_ERROR_MSG", nil)
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Internal server error", nil)
 			c.Abort()
 			return
 		}
 
 		if userRole.(string) != "admin" {
-			utils.UnathorizedResponse(c, "ACCESS_DENIED"+"ONLY_FOR_ADMINS")
+			utils.ErrorResponse(c, http.StatusForbidden, "Access denied. Only admin users can access this resource", nil)
 			c.Abort()
 			return
 		}
 
-		c.Next()
+		if !c.IsAborted() {
+			if next, exists := c.Get("next"); exists {
+				next.(func())()
+			}
+		}
 	}
 }
 
@@ -89,13 +103,17 @@ func (m *AuthMiddleware) OptionalAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.Next()
+			if next, exists := c.Get("next"); exists {
+				next.(func())()
+			}
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
-			c.Next()
+			if next, exists := c.Get("next"); exists {
+				next.(func())()
+			}
 			return
 		}
 
@@ -106,7 +124,9 @@ func (m *AuthMiddleware) OptionalAuth() gin.HandlerFunc {
 			c.Set("user_role", user.Role)
 		}
 
-		c.Next()
+		if next, exists := c.Get("next"); exists {
+			next.(func())()
+		}
 	}
 }
 
@@ -120,23 +140,27 @@ func (m *AuthMiddleware) RequireRole(requiredRole string) gin.HandlerFunc {
 
 		userRole, exists := c.Get("user_role")
 		if !exists {
-			utils.InternalServerErrorResponse(c, "INTERNAL_ERROR", nil)
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Internal server error", nil)
 			c.Abort()
 			return
 		}
 
 		if userRole.(string) != requiredRole {
-			utils.UnathorizedResponse(c, "ACCESS_DENIED"+"NEED_ROLE"+": "+requiredRole)
+			utils.ErrorResponse(c, http.StatusUnauthorized, "Access denied. Need role: "+requiredRole, nil)
 			c.Abort()
 			return
 		}
 
-		c.Next()
+		if !c.IsAborted() {
+			if next, exists := c.Get("next"); exists {
+				next.(func())()
+			}
+		}
 	}
 }
 
 func authMiddlewareLog(format string, v ...any) {
 	logPrefix := "[AUTH-MIDDLEWARE]"
-	message := fmt.Sprintf(format, v)
+	message := fmt.Sprintf(format, v...)
 	log.Printf("%s %s", logPrefix, message)
 }

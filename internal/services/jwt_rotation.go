@@ -64,7 +64,10 @@ func (m *JWTKeyManager) generateNewKey() {
 	}
 
 	idBytes := make([]byte, 16)
-	rand.Read(idBytes)
+	_, err := rand.Read(idBytes)
+	if err != nil {
+		panic("Error generating random bytes: " + err.Error())
+	}
 
 	m.currentKey = base64.URLEncoding.EncodeToString(keyBytes)
 	m.keyID = base64.URLEncoding.EncodeToString(idBytes)

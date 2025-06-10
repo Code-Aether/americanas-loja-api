@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"log"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -26,7 +27,7 @@ func Load() *Config {
 		DBDriver:    getEnv("DB_DRIVER", "sqlite"),
 		DBHost:      getEnv("DB_HOST", "localhost"),
 		DBUser:      getEnv("DB_USER", "admin"),
-		DBPassword:  getEnv("DB_PASSWORD", "password"),
+		DBPassword:  getDBPassword("password"),
 		DBName:      getEnv("DB_NAME", "store"),
 		DBPort:      getEnv("DB_PORT", "5432"),
 		RedisURL:    getEnv("REDIS_URL", "localhost:6379"),
@@ -40,7 +41,41 @@ func Load() *Config {
 	return config
 }
 
+func getDBPassword(defaultValue string) string {
+	secretPath := "/run/secrets/db_password"
+	if _, err := os.Stat(secretPath); err == nil {
+		secretBytes, err := os.ReadFile(secretPath)
+		if err != nil {
+			log.Fatalf("Failed to read password file: %v", err)
+		}
+		passwd := strings.TrimSpace(string(secretBytes))
+		log.Println("Database password loaded from Docker secret file.")
+		return passwd
+	}
+
+	log.Println("Loading database password from enviroment variable")
+	if passwd := os.Getenv("DB_PASSWORD"); passwd != "" {
+		log.Println("Loaded from DB_PASSWORD")
+		return passwd
+	}
+
+	log.Println("Using default value")
+	return defaultValue
+}
+
 func getJWTSecret() string {
+	secretPath := "/run/secrets/jwt_secret"
+	if _, err := os.Stat(secretPath); err == nil {
+		secretBytes, err := os.ReadFile(secretPath)
+		if err != nil {
+			log.Fatalf("Failed to read secret file: %v", err)
+		}
+		secret := strings.TrimSpace(string(secretBytes))
+		log.Println("JWT Secret loaded from Docker secret file.")
+		return secret
+	}
+	log.Println("JWT Secret loaded from environment variable (fallback).")
+
 	if secret := os.Getenv("JWT_SECRET"); secret != "" {
 		if len(secret) < 32 {
 			log.Fatal("JWT_SECRET must be atlest 32 characters long")

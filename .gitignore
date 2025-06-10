@@ -68,3 +68,11 @@ backup/
 
 reports/
 *.report
+
+# Docker secrets
+jwt_secret.txt
+db_password.txt
+postgres_password.txt
+
+# Ignorar certificados e chaves privadas
+*.pem

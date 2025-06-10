@@ -1,0 +1,357 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Permite execução manual
+
+env:
+  GO_VERSION: '1.23'
+  COVERAGE_THRESHOLD: 20 # for now
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+      
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name: Download dependências
+      run: go mod download
+      
+    - name:  Verificar formatação
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo " Código não formatado encontrado:"
+          gofmt -s -l .
+          exit 1
+        fi
+        echo " Formatação OK"
+        
+    - name:  Go vet
+      run: go vet ./...
+      
+    - name:  Verificar Swagger
+      run: |
+        go install github.com/swaggo/swag/cmd/swag@latest
+        swag init -g cmd/server/main.go -o ./docs --parseInternal --parseDepth 2
+        if [ ! -f "docs/swagger.json" ]; then
+          echo " Swagger não foi gerado"
+          exit 1
+        fi
+        echo " Swagger gerado com sucesso"
+      
+    - name:  golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        args: --timeout=5m
+        skip-cache: false
+        skip-pkg-cache: false
+        skip-build-cache: false
+
+  test:
+    name:  Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.23']
+        
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+      
+    - name: Setup Go ${{ matrix.go-version }}
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+        cache: true
+        
+    - name:  Download dependências
+      run: go mod download
+      
+    - name:  Executar testes
+      run: |
+        go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        
+    - name:  Análise de coverage
+      run: |
+        go tool cover -func=coverage.out
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo "Coverage: ${COVERAGE}%"
+        echo "COVERAGE=${COVERAGE}" >> $GITHUB_ENV
+        
+        if (( $(echo "$COVERAGE < $COVERAGE_THRESHOLD" | bc -l) )); then
+          echo " Coverage muito baixo: ${COVERAGE}% (mínimo: ${COVERAGE_THRESHOLD}%)"
+          exit 1
+        fi
+        echo " Coverage OK: ${COVERAGE}%"
+        
+    - name:  Upload coverage para Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+        
+    - name:  Upload coverage artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report-go-${{ matrix.go-version }}
+        path: coverage.out
+
+  # Job 3: Benchmarks
+  benchmark:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name:  Checkout código
+      uses: actions/checkout@v4
+      
+    - name:  Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name:  Download dependências
+      run: go mod download
+      
+    - name:  Executar benchmarks
+      run: |
+        go test -bench=. -benchmem ./... | tee benchmark.txt
+        
+    - name:  Benchmark comment
+      uses: benchmark-action/github-action-benchmark@v1
+      if: github.event_name == 'pull_request'
+      with:
+        tool: 'go'
+        output-file-path: benchmark.txt
+        comment-on-alert: true
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 4: Verificação de Segurança
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+      
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name:  Download dependências
+      run: go mod download
+      
+    - name:  Verificar vulnerabilidades
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./...
+        
+    - name:  Nancy - Verificação de dependências
+      uses: sonatypecommunity/nancy-github-action@main
+      with:
+        nancyCommand: sleuth
+
+  test-docker-build:
+    name: Test Docker Build
+    runs-on: ubuntu-latest
+    # This job should only run on pull requests
+    if: github.event_name == 'pull_request'
+    # It can depend on the main build and test jobs passing first
+    needs: [lint, test]
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name:  Build Docker image for testing
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        # Load the image into the local Docker daemon
+        load: true
+        # DO NOT push the image
+        push: false
+        # Tag the image so we can reference it in the next step
+        tags: americanas-loja-api-app:pr-${{ github.event.number }}
+
+    - name: Run the container
+      run: |
+        docker run \
+          -d \
+          --name americanas-loja-api-container \
+          -p 8080:8080 \
+          americanas-loja-api-app:pr-${{ github.event.number }}
+        # The '-d' flag runs the container in detached mode (in the background)
+        # We map port 8080 on the host to 8080 in the container
+
+    - name: Wait for container to be healthy
+      run: |
+        echo "Waiting for the application to start..."
+        sleep 15
+        # A simple sleep is often enough for a quick startup.
+        # For more complex apps, you might use a loop that polls the health endpoint.
+
+    - name: Perform smoke test
+      run: |
+        echo "Performing smoke test..."
+        # Use curl to send a request to your application's health check endpoint.
+        # This assumes your app has a '/health' endpoint that returns a 200 OK status.
+        # The '--fail' flag makes curl exit with an error if the HTTP status is not 2xx.
+        curl --fail http://localhost:8080/health
+
+    - name: Check container logs
+      # This step runs only if the smoke test fails, which is useful for debugging.
+      if: failure()
+      run: |
+        echo "Smoke test failed. Displaying container logs..."
+        docker logs my-app-container
+
+  # Job 5: Build
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+            
+    steps:
+    - name:  Checkout código
+      uses: actions/checkout@v4
+      
+    - name:  Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name:  Download dependências
+      run: go mod download
+      
+    - name:  Gerar Swagger
+      run: |
+        go install github.com/swaggo/swag/cmd/swag@latest
+        swag init -g cmd/server/main.go -o ./docs --parseInternal --parseDepth 2
+        
+    - name: Build
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        EXT=""
+        if [ "$GOOS" = "windows" ]; then
+          EXT=".exe"
+        fi
+        
+        OUTPUT="bin/americanas-api-${GOOS}-${GOARCH}${EXT}"
+        mkdir -p bin
+        
+        go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o "$OUTPUT" cmd/server/main.go
+        
+        # Verificar se o binário foi criado
+        if [ ! -f "$OUTPUT" ]; then
+          echo " Falha ao criar binário: $OUTPUT"
+          exit 1
+        fi
+        
+        echo "Binário criado: $OUTPUT"
+        ls -la "$OUTPUT"
+        
+    - name: Upload binários
+      uses: actions/upload-artifact@v3
+      with:
+        name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: bin/
+        retention-days: 30
+
+  # Job 7: Release (apenas em main)
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [test-docker-build, build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name:  Download binários
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts/
+        
+    - name: Preparar release
+      run: |
+        mkdir -p release/
+        find artifacts/ -name "americanas-api-*" -type f -exec cp {} release/ \;
+        ls -la release/
+        
+    - name: Gerar changelog
+      run: |
+        echo "# Release $(date +%Y.%m.%d)" > CHANGELOG.md
+        echo "" >> CHANGELOG.md
+        echo "## Changes" >> CHANGELOG.md
+        git log --oneline --since="1 day ago" >> CHANGELOG.md || echo "No recent changes" >> CHANGELOG.md
+        
+    - name: ️ Criar release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ github.run_number }}
+        name: Release v${{ github.run_number }}
+        body_path: CHANGELOG.md
+        files: release/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 8: Notificações
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [lint, test, build]
+    if: always()
+    
+    steps:
+    - name: Status do pipeline
+      run: |
+        if [ "${{ needs.lint.result }}" = "success" ] && [ "${{ needs.test.result }}" = "success" ] && [ "${{ needs.build.result }}" = "success" ]; then
+          echo "Pipeline executado com sucesso!"
+          echo "STATUS=success" >> $GITHUB_ENV
+        else
+          echo "Pipeline falhou!"
+          echo "STATUS=failure" >> $GITHUB_ENV
+        fi
+        
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

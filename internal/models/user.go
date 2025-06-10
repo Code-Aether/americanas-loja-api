@@ -1,20 +1,20 @@
 package models
 
 import (
-	"time"
 	"gorm.io/gorm"
+	"time"
 )
 
 type User struct {
-	ID uint `json:"id" gorm:"primaryKey"`
-	Email string `json:"email" gorm:"uniquyeIndex;not null"`
-	Password string `json:"-" gorm:"not null"`
-	Name string `json:"name" gorm:"not null"`
-	Role string `json:"role" gorm:"default:user"`
-	Active bool `json:"active" gorm:"default:true"`
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Email     string         `json:"email" gorm:"uniquyeIndex;not null"`
+	Password  string         `json:"-" gorm:"not null"`
+	Name      string         `json:"name" gorm:"not null"`
+	Role      string         `json:"role" gorm:"default:user"`
+	Active    bool           `json:"active" gorm:"default:true"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
- 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type LoginRequest struct {
@@ -32,4 +32,3 @@ type LoginResponse struct {
 	Token string `json:"token"`
 	User  User   `json:"user"`
 }
-

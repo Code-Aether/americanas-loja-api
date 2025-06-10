@@ -296,6 +296,6 @@ func checkUserLogged(c *gin.Context) (*models.User, error) {
 
 func productHandlerLog(format string, v ...any) {
 	prefix := "[PRODUCT_HANDLER]"
-	message := fmt.Sprintf(format, v)
+	message := fmt.Sprintf(format, v...)
 	log.Printf("%s %s", prefix, message)
 }

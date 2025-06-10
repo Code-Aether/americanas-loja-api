@@ -36,32 +36,39 @@ func (s *AuthService) Login(req types.LoginRequest) (*string, *models.User, erro
 	user, err := s.userRepo.GetByEmail(req.Email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil, errors.New("EMAIL_OR_PASS_NOT_VALID")
+			return nil, nil, errors.New("invalid credentials")
 		}
-		return nil, nil, errors.New("INTERNAL_ERROR")
+		return nil, nil, errors.New("internal error")
 	}
 
 	if !user.Active {
-		return nil, nil, errors.New("INACTIVE_USER")
+		return nil, nil, errors.New("user is inactive")
 	}
 
 	if !s.checkPassword(req.Password, user.Password) {
-		return nil, nil, errors.New("EMAIL_OR_PASS_NOT_VALID")
+		return nil, nil, errors.New("invalid credentials")
 	}
 
-	token, user, err := s.generateJWT(user)
+	token, _, err := s.GenerateJWT(user)
 	if err != nil {
-		return nil, nil, errors.New("ERROR_GENERATING_ACCESS_TOKEN")
+		return nil, nil, errors.New("error generating access token")
 	}
 
 	return &token, user, nil
 }
 
 func (s *AuthService) Register(user *models.User) (*string, error) {
+	if user.Email == "" {
+		return nil, errors.New("email is required")
+	}
+
+	if len(user.Password) < 6 {
+		return nil, errors.New("password must be at least 6 characters long")
+	}
 
 	existingUser, err := s.userRepo.GetByEmail(user.Email)
 	if err == nil && existingUser != nil {
-		return nil, errors.New("user already exsists with this email")
+		return nil, errors.New("user already exists")
 	}
 
 	hashedPassword, err := s.hashPassword(user.Password)
@@ -75,7 +82,7 @@ func (s *AuthService) Register(user *models.User) (*string, error) {
 		return nil, errors.New("error create a new user")
 	}
 
-	token, _, err := s.generateJWT(user)
+	token, _, err := s.GenerateJWT(user)
 	if err != nil {
 		return nil, errors.New("error created a new token")
 	}
@@ -83,7 +90,7 @@ func (s *AuthService) Register(user *models.User) (*string, error) {
 	return &token, nil
 }
 
-func (s *AuthService) generateJWT(user *models.User) (string, *models.User, error) {
+func (s *AuthService) GenerateJWT(user *models.User) (string, *models.User, error) {
 	timeNow := time.Now()
 	claims := JWTClaims{
 		UserID: user.ID,
@@ -153,7 +160,7 @@ func (s *AuthService) RefreshToken(tokenString string) (string, *models.User, er
 		return "", nil, errors.New("USER_NOT_FOUND")
 	}
 
-	return s.generateJWT(user)
+	return s.GenerateJWT(user)
 }
 
 func (s *AuthService) ChangePassword(userID uint, oldPassword, newPassword string) error {

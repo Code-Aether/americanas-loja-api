@@ -1,26 +1,30 @@
-# Use the official Golang image
-FROM golang:1.23-alpine
+FROM golang:1.23-alpine AS builder
 
-# Set the working directory inside the container
+ARG APP_NAME=api
 WORKDIR /app
 
-# Install necessary packages
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache make git build-base
 
-# Copy all the files from your project folder into the container's /app folder
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . .
 
-# Download Go modules
-RUN go mod tidy
+RUN make build
 
-# Build the Go application.
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main /app/cmd/server
+RUN [ -f ./bin/${APP_NAME} ] || (echo "Binário não foi criado" && exit 1)
+RUN chmod +x ./bin/api
 
-# Make the binary executable
-RUN chmod +x /app/main
+FROM alpine:latest
 
-# Expose port 8080 to the outside world
+ARG APP_NAME=api
+WORKDIR /app
+
+RUN apk add --no-cache ca-certificates tzdata
+
+COPY --from=builder /app/bin/${APP_NAME} .
+COPY --from=builder /app/docs ./docs
+
 EXPOSE 8080
 
-# Command to run the executable
-CMD ["/app/main"]
+CMD ["./api"]

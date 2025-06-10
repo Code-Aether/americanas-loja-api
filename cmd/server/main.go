@@ -140,6 +140,13 @@ func setupRoutes(r *gin.Engine, productHandler *handlers.ProductHandler, authHan
 		{
 			adminProtected.DELETE("/products/:id", productHandler.DeleteProduct)
 
+			adminProtected.GET("/admin", func(c *gin.Context) {
+				c.JSON(200, gin.H{
+					"message": "Admin list - TODO",
+					"admin":   true,
+				})
+			})
+
 			adminProtected.GET("/admin/users", func(c *gin.Context) {
 				c.JSON(200, gin.H{
 					"message": "User list - TODO",

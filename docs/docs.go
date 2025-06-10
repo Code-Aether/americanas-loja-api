@@ -99,7 +99,7 @@ const docTemplate = `{
                 "summary": "Renovar token",
                 "responses": {
                     "200": {
-                        "description": "Token renovado com sucesso",
+                        "description": "token renewed successfully",
                         "schema": {
                             "allOf": [
                                 {
@@ -117,13 +117,13 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Token inválido",
+                        "description": "invalid token format",
                         "schema": {
                             "$ref": "#/definitions/utils.Response"
                         }
                     },
                     "500": {
-                        "description": "Erro interno",
+                        "description": "internal error",
                         "schema": {
                             "$ref": "#/definitions/utils.Response"
                         }
@@ -146,7 +146,7 @@ const docTemplate = `{
                 "summary": "Registrar novo usuário",
                 "parameters": [
                     {
-                        "description": "Dados do usuário",
+                        "description": "user data",
                         "name": "user",
                         "in": "body",
                         "required": true,
@@ -157,7 +157,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Usuário criado com sucesso",
+                        "description": "user created with success",
                         "schema": {
                             "allOf": [
                                 {
@@ -175,19 +175,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Dados inválidos",
+                        "description": "invalid data",
                         "schema": {
                             "$ref": "#/definitions/utils.Response"
                         }
                     },
                     "409": {
-                        "description": "Email já existe",
+                        "description": "email already exists",
                         "schema": {
                             "$ref": "#/definitions/utils.Response"
                         }
                     },
                     "500": {
-                        "description": "Erro interno",
+                        "description": "internal error",
                         "schema": {
                             "$ref": "#/definitions/utils.Response"
                         }

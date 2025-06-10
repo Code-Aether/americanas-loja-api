@@ -35,6 +35,15 @@ func SuccessResponse(c *gin.Context, message string, data interface{}) {
 		Data:    data,
 	})
 }
+
+func SuccessResponseWithStatus(c *gin.Context, status int, message string, data interface{}) {
+	c.JSON(status, Response{
+		Success: true,
+		Message: message,
+		Data:    data,
+	})
+}
+
 func CreatedResponse(c *gin.Context, status int, message string, data interface{}) {
 	c.JSON(status, Response{
 		Success: true,

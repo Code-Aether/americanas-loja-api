@@ -31,22 +31,22 @@ func NewAuthHandler(authService *services.AuthService) *AuthHandler {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        user body types.RegisterRequest true "Dados do usuário"
-// @Success      201  {object} utils.Response{data=types.AuthResponse} "Usuário criado com sucesso"
-// @Failure      400  {object} utils.Response "Dados inválidos"
-// @Failure      409  {object} utils.Response "Email já existe"
-// @Failure      500  {object} utils.Response "Erro interno"
+// @Param        user body types.RegisterRequest true "user data"
+// @Success      201  {object} utils.Response{data=types.AuthResponse} "user created with success"
+// @Failure      400  {object} utils.Response "invalid data"
+// @Failure      409  {object} utils.Response "email already exists"
+// @Failure      500  {object} utils.Response "internal error"
 // @Router       /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req types.RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "INVALID_DATA", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid data", err)
 		return
 	}
 
 	if err := h.validator.Struct(&req); err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "INVALID_DATA", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid data", err)
 		return
 	}
 
@@ -60,11 +60,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	token, err := h.authService.Register(user)
 	if err != nil {
-		if err.Error() == "user already exsists with this email" {
-			utils.ErrorResponse(c, http.StatusConflict, "EMAIL_ALREADY_EXISTS", err)
+		if err.Error() == "user already exists" {
+			utils.ErrorResponse(c, http.StatusConflict, "email already exists", err)
 			return
 		}
-		utils.InternalServerErrorResponse(c, err.Error(), nil)
+		utils.ErrorResponse(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Token: *token,
 		User:  *user,
 	}
-	utils.SuccessResponse(c, "USER_CREATED", response)
+	utils.SuccessResponseWithStatus(c, http.StatusCreated, "user created with success", response)
 }
 
 // Login godoc
@@ -91,18 +91,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var req types.LoginRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestResponse(c, "INVALID_DATA", err)
+		utils.BadRequestResponse(c, "invalid data", err)
 		return
 	}
 
 	if err := h.validator.Struct(&req); err != nil {
-		utils.BadRequestResponse(c, "INVALID_DATA", err)
+		utils.BadRequestResponse(c, "invalid data", err)
 		return
 	}
 
 	token, user, err := h.authService.Login(req)
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "INVALID_CREDENCIALS", err)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "invalid user or password", err)
 		return
 	}
 
@@ -110,7 +110,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		Token: *token,
 		User:  *user,
 	}
-	utils.SuccessResponse(c, "LOGIN_SUCCESS_MSG", response)
+	utils.SuccessResponse(c, "login successfull", response)
 }
 
 // GetProfile godoc
@@ -127,7 +127,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) GetProfile(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
-		utils.UnathorizedResponse(c, "USER_NOT_AUTHENTICATED")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "USER_NOT_AUTHENTICATED", nil)
 		return
 	}
 
@@ -142,18 +142,18 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestResponse(c, "INVALID_DATA", err)
+		utils.BadRequestResponse(c, "invalid data", err)
 		return
 	}
 
 	if len(req.NewPassword) < 6 {
-		utils.BadRequestResponse(c, "NEW_PASSWORD_FAILED_MSG", nil)
+		utils.BadRequestResponse(c, "new password is invalid, should be bigger than 6 characters", nil)
 		return
 	}
 
 	user, exists := c.Get("user")
 	if !exists {
-		utils.UnathorizedResponse(c, "USER_NOT_AUTHENTICATED")
+		utils.UnathorizedResponse(c, "user not authenticated")
 		return
 	}
 
@@ -165,7 +165,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, "PASSWORD_CHANGE_SUCCESS_MSG", nil)
+	utils.SuccessResponse(c, "password change sucessfull", nil)
 }
 
 // RefreshToken godoc
@@ -175,26 +175,26 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Security     Bearer
-// @Success      200  {object} utils.Response{data=types.AuthResponse} "Token renovado com sucesso"
-// @Failure      401  {object} utils.Response "Token inválido"
-// @Failure      500  {object} utils.Response "Erro interno"
+// @Success      200  {object} utils.Response{data=types.AuthResponse} "token renewed successfully"
+// @Failure      401  {object} utils.Response "invalid token format"
+// @Failure      500  {object} utils.Response "internal error"
 // @Router       /auth/refresh [post]
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		utils.UnathorizedResponse(c, "NO_TOKEN_REQ_MSG")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "authorization header is required", nil)
 		return
 	}
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	if tokenString == authHeader {
-		utils.UnathorizedResponse(c, "WRONG_TOKEN_FORMAT_MSG")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "invalid token format. Use: Bearer <token>", nil)
 		return
 	}
 
 	newToken, user, err := h.authService.RefreshToken(tokenString)
 	if err != nil {
-		utils.UnathorizedResponse(c, "INVALID_TOKEN_MSG")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "invalid or expired token", err)
 		return
 	}
 
@@ -202,12 +202,11 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		Token: newToken,
 		User:  *user,
 	}
-
-	utils.SuccessResponse(c, "TOKEN_REFRESH_SUCCESS_MSG", response)
+	utils.SuccessResponse(c, "token renewed successfully", response)
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	utils.SuccessResponse(c, "LOGOUT_SUCCESS_MSG", gin.H{
-		"message": "REMOVE_TOKEN",
+	utils.SuccessResponse(c, "logout successfull", gin.H{
+		"message": "revoke token from user",
 	})
 }

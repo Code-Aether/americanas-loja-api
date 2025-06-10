@@ -241,7 +241,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: Token renovado com sucesso
+          description: token renewed successfully
           schema:
             allOf:
             - $ref: '#/definitions/utils.Response'
@@ -250,11 +250,11 @@ paths:
                   $ref: '#/definitions/types.AuthResponse'
               type: object
         "401":
-          description: Token inválido
+          description: invalid token format
           schema:
             $ref: '#/definitions/utils.Response'
         "500":
-          description: Erro interno
+          description: internal error
           schema:
             $ref: '#/definitions/utils.Response'
       security:
@@ -268,7 +268,7 @@ paths:
       - application/json
       description: Cria uma nova conta de usuário no sistema
       parameters:
-      - description: Dados do usuário
+      - description: user data
         in: body
         name: user
         required: true
@@ -278,7 +278,7 @@ paths:
       - application/json
       responses:
         "201":
-          description: Usuário criado com sucesso
+          description: user created with success
           schema:
             allOf:
             - $ref: '#/definitions/utils.Response'
@@ -287,15 +287,15 @@ paths:
                   $ref: '#/definitions/types.AuthResponse'
               type: object
         "400":
-          description: Dados inválidos
+          description: invalid data
           schema:
             $ref: '#/definitions/utils.Response'
         "409":
-          description: Email já existe
+          description: email already exists
           schema:
             $ref: '#/definitions/utils.Response'
         "500":
-          description: Erro interno
+          description: internal error
           schema:
             $ref: '#/definitions/utils.Response'
       summary: Registrar novo usuário
