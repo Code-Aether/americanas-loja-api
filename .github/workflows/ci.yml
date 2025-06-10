@@ -106,7 +106,7 @@ jobs:
         fail_ci_if_error: false
         
     - name:  Upload coverage artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-report-go-${{ matrix.go-version }}
         path: coverage.out
@@ -167,7 +167,7 @@ jobs:
         govulncheck ./...
         
     - name:  Nancy - Verificação de dependências
-      uses: sonatypecommunity/nancy-github-action@main
+      uses: sonatype-nexus-community/nancy-github-action@main
       with:
         nancyCommand: sleuth
 
@@ -285,7 +285,7 @@ jobs:
         ls -la "$OUTPUT"
         
     - name: Upload binários
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
         path: bin/
@@ -305,7 +305,7 @@ jobs:
         fetch-depth: 0
         
     - name:  Download binários
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         path: artifacts/
         
