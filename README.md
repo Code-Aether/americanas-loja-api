@@ -1,6 +1,12 @@
 # americanas-loja-api
 
-> API RESTful para e-commerce inspirado na Americanas, desenvolvida com Go, Gin, GORM e arquitetura limpa.
+Este projeto é uma API RESTful para e-commerce, construída em Go, que simula o backend de um sistema de gestão para lojas físicas. Ele foi desenvolvido como um case study técnico para a Americanas S.A., aplicando práticas modernas de engenharia de software para resolver desafios de negócio reais da companhia.
+Desafios de Negócio Abordados:
+
+    Gestão de Produtos em Larga Escala: Simulação de um sistema que precisa suportar o catálogo de +1600 lojas.
+    Performance e Confiabilidade: Construído para ter alta disponibilidade e tempos de resposta rápidos, essenciais no varejo.
+    Integração com Sistemas Distribuídos: Arquitetura pensada para se conectar a outros microsserviços (ex: estoque, pagamentos, etc.).
+    Foco na Experiência do Usuário Interno: API projetada para ser consumida por painéis administrativos e outras ferramentas internas de forma clara e eficiente.
 
 [![CI/CD Pipeline](https://github.com/Code-Aether/americanas-loja-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Code-Aether/americanas-loja-api/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Code-Aether/americanas-loja-api)](https://goreportcard.com/report/github.com/Code-Aether/americanas-loja-api)
